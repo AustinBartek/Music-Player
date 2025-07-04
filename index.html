@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<link rel="stylesheet" href="">
+	<style>
+		body {
+			width: 100%;
+			height: 100%;
+			position: fixed;
+			margin: 0;
+			background-color: black;
+		}
+
+		#c {
+			position: absolute;
+		}
+
+		.button {
+			position: absolute;
+			color: white;
+			background-color: gray;
+			border-color: #444444;
+			border-width: 0.5vmin;
+			width: 15vw;
+			height: 7.5vw;
+			font-size: 4vw;
+
+			bottom: 4vw;
+		}
+
+		#playButton {
+			left: 42.5vw;
+			background-color: red;
+		}
+
+		#left {
+			left: 26.5vw;
+		}
+
+		#trackLeft {
+			left: 10.5vw;
+		}
+
+		#right {
+			left: 58.5vw;
+		}
+
+		#trackRight {
+			left: 74.5vw;
+		}
+
+		#rainButton {
+			bottom: 12.5vw;
+			left: 34.5vw;
+		}
+
+		#slowButton {
+			bottom: 12.5vw;
+			left: 50.5vw;
+		}
+	</style>
+</head>
+
+<body>
+	<canvas id="c"></canvas>
+	<button id="slowButton" class="button">S</button>
+	<button id="rainButton" class="button">R</Button>
+	<button id="playButton" class="button">&#x23F5;</button>
+	<button id="left" class="button">&lt</button>
+	<button id="right" class="button">&gt</button>
+	<button id="trackLeft" class="button">&lt&lt</button>
+	<button id="trackRight" class="button">&gt&gt</button>
+
+	<script src="backgrounds.js"></script>
+	<script src="musicData.js"></script>
+	<script>
+
+		const winWidth = window.innerWidth, winHeight = window.innerHeight;
+
+		function getById(id) {
+			return document.getElementById(id);
+		}
+
+		let continueShuffle = false;
+
+		try {
+
+			//RAIN BUTTON
+			const rain = new Audio("musicFiles/Rain.mp3");
+			rain.loop = true;
+			const rainButton = getById("rainButton");
+			rainButton.addEventListener("click", () => {
+				if (rain.paused) {
+					rain.play();
+					rainButton.style.backgroundColor = "blue";
+				} else {
+					rain.pause();
+					rainButton.style.backgroundColor = "gray";
+				}
+			});
+
+			//SLOW BUTTON
+			function setSpeed(num) {
+				for (const track of tracks) {
+					for (const songObj of track.songs) {
+						songObj.song.playbackRate = num;
+						songObj.updateNode();
+					}
+				}
+
+			}
+
+			const slowButton = document.getElementById("slowButton");
+			slowButton.addEventListener("click", () => {
+
+				const slowSpd = 0.8;
+				if (tracks[currentTrack].songs[currentSong].song.playbackRate == slowSpd) {
+					setSpeed(1);
+					slowButton.style.backgroundColor = "gray";
+				} else {
+					setSpeed(slowSpd);
+					slowButton.style.backgroundColor = "orange";
+				}
+			});
+
+			//incrementer for the song
+			let currentTrack = 0;
+			let currentSong = 0;
+
+			//adding button function
+			const playButton = getById("playButton");
+
+			function fixPlayButton() {
+				if (!tracks[currentTrack].songs[currentSong].song.paused) {
+					playButton.innerHTML = "&#x25CB;";
+				} else {
+					playButton.innerHTML = "&#x23F5;";
+				}
+			}
+			playButton.addEventListener("click", async () => {
+				const songObj = tracks[currentTrack].songs[currentSong];
+				audioCtx.resume();
+
+				if (songObj.song.paused) {
+					//songObj.node.connect(merge);
+
+					songObj.song.play();
+				} else {
+					songObj.song.pause();
+				}
+
+				fixPlayButton();
+			});
+
+			//DIRECTION BUTTONS
+			const leftButton = getById("left"), rightButton = getById("right");
+			const switchSong = async (dir) => {
+				//stop current song
+				tracks[currentTrack].songs[currentSong].song.pause();
+				tracks[currentTrack].songs[currentSong].song.currentTime = 0;
+
+				//update song num
+				currentSong += dir;
+				if (currentSong < 0) currentSong = tracks[currentTrack].songs.length - 1;
+				if (currentSong == tracks[currentTrack].songs.length) currentSong = 0;
+
+				audioCtx.resume();
+
+				//update graphic
+				fixPlayButton();
+			}
+			leftButton.addEventListener("click", () => switchSong(-1));
+			rightButton.addEventListener("click", () => switchSong(1));
+
+			const rightTrack = getById("trackRight");
+			const leftTrack = getById("trackLeft");
+			const switchTrack = async (dir) => {
+				tracks[currentTrack].songs[currentSong].song.pause();
+
+				currentSong = 0;
+				currentTrack += dir;
+				if (currentTrack < 0) currentTrack = tracks.length - 1;
+				if (currentTrack == tracks.length) currentTrack = 0;
+
+				audioCtx.resume();
+
+				fixPlayButton();
+			}
+			rightTrack.addEventListener("click", () => { switchTrack(1) });
+			leftTrack.addEventListener("click", () => { switchTrack(-1) });
+
+
+			//========================
+			//GRAPHICS AND TIMED STUFF
+			//========================
+
+			const canvas = getById("c");
+			canvas.style.width = "100vw";
+			canvas.style.height = "100vh";
+			const width = winWidth;
+			const height = winHeight;
+			canvas.width = width;
+			canvas.height = height;
+
+			const ctx = canvas.getContext("2d");
+
+			//========================
+			//DRAW FUNCTION -------
+
+
+			let origin = document.timeline.currentTime;
+			let lastTime = origin;
+
+			function draw() {
+
+				const songObj = tracks[currentTrack].songs[currentSong];
+
+				let time = document.timeline.currentTime - origin;
+				let playing = true;
+				if (songObj.song.paused) {
+					origin += time - lastTime;
+					time = lastTime;
+					playing = false;
+				}
+
+				songObj.bg(ctx, width, height, time, playing);
+
+				const casetteCol = "#222222";
+
+				//CASETTE
+				const casetteWidth = width * 9 / 10;
+				const casetteHeight = casetteWidth * 3 / 5;
+				const casetteX = width / 2 - casetteWidth / 2;
+				const casetteY = height / 2 - casetteHeight / 2;
+				const cornerRad = width / 25;
+				//BLACK BACK
+				ctx.fillStyle = casetteCol;
+				roundBox(ctx, casetteX, casetteY, casetteWidth, casetteHeight, cornerRad);
+
+				//WHITE PART
+				const inset = casetteHeight / 16;
+				const whiteHeight = casetteHeight * 6 / 8;
+				const whiteY = casetteY + whiteHeight;
+				ctx.fillStyle = "white";
+				ctx.beginPath();
+				ctx.moveTo(casetteX + cornerRad, whiteY);
+				ctx.lineTo(casetteX + cornerRad, casetteY + inset + cornerRad);
+				ctx.lineTo(casetteX + cornerRad + inset, casetteY + cornerRad);
+				ctx.lineTo(casetteX + casetteWidth - inset - cornerRad, casetteY + cornerRad);
+				ctx.lineTo(casetteX + casetteWidth - cornerRad, casetteY + cornerRad + inset);
+				ctx.lineTo(casetteX + casetteWidth - cornerRad, whiteY);
+				ctx.lineTo(casetteX, whiteY);
+				ctx.fill();
+				ctx.closePath();
+
+				//COLORED PART
+				const coloredHeight = casetteHeight * 7 / 16;
+				ctx.fillStyle = songObj.col1;
+				ctx.fillRect(casetteX + cornerRad, whiteY - coloredHeight, casetteWidth - cornerRad * 2, coloredHeight)
+				ctx.fillStyle = songObj.col2;
+				ctx.fillRect(casetteX + cornerRad, whiteY - coloredHeight, casetteWidth - cornerRad * 2, coloredHeight / 7);
+				ctx.fillRect(casetteX + cornerRad, whiteY - coloredHeight + coloredHeight * 2 / 7, casetteWidth - cornerRad * 2, coloredHeight / 7);
+				ctx.fillRect(casetteX + cornerRad, whiteY - coloredHeight + coloredHeight * 4 / 7, casetteWidth - cornerRad * 2, coloredHeight / 7);
+
+				//SPINNING CENTER 
+				const discRad = coloredHeight * 3 / 5 / 2;
+				const discWidth = casetteWidth * 3 / 5;
+				const discX = casetteX + casetteWidth / 2 - discWidth / 2;
+				const discY = casetteY + casetteHeight * 5 / 8 - casetteHeight * 5 / 16;
+				ctx.fillStyle = casetteCol;
+				circle(ctx, discX + discRad, discY + discRad, discRad);
+				circle(ctx, discX + discWidth - discRad, discY + discRad, discRad);
+				ctx.fillRect(discX + discRad, discY, discWidth - discRad * 2, discRad * 2);
+
+				//WHITE PART OF CENTER 
+				const whiteCenterRad = discRad * 4 / 5;
+				const whiteStripWidth = discWidth * 1 / 10;
+				const whiteStripHeight = discRad * 6 / 5;
+				const whiteStripOffsetY = discRad * 1 / 5;
+				ctx.fillStyle = "white";
+				circle(ctx, discX + discRad, discY + discRad, whiteCenterRad);
+				circle(ctx, discX + discWidth - discRad, discY + discRad, whiteCenterRad);
+				ctx.fillRect(discX + discWidth / 2 - whiteStripWidth / 2, discY + whiteStripOffsetY, whiteStripWidth, whiteStripHeight);
+
+				//INNER SPINNING GRAY CIRCLES
+				ctx.fillStyle = "gray";
+				const circleNum = 6;
+				const circleRad = whiteCenterRad / 6;
+				const useTime = (!songObj.song.paused) ? time : 0;
+				const timeMod = (useTime / 4000) % 1;
+
+				for (let i = 0, angle = Math.PI * 2 * timeMod; i < circleNum; i++, angle += Math.PI * 2 / circleNum) {
+					const xOffset = (whiteCenterRad - circleRad) * Math.cos(angle);
+					const yOffset = (whiteCenterRad - circleRad) * Math.sin(angle);
+					circle(ctx, discX + discRad + xOffset, discY + discRad + yOffset, circleRad);
+					circle(ctx, discX + discWidth - discRad + xOffset, discY + discRad + yOffset, circleRad);
+				}
+
+				//TEXT 
+				const line1Y = casetteY + cornerRad + (whiteHeight - coloredHeight - cornerRad) / 3;
+				const line2Y = casetteY + cornerRad + (whiteHeight - coloredHeight - cornerRad) * 2 / 3;
+
+				ctx.strokeStyle = "black";
+				ctx.lineWidth = casetteHeight / 200;
+
+				for (const yVal of [line1Y, line2Y]) {
+					ctx.beginPath();
+					ctx.moveTo(casetteX + cornerRad + inset, yVal);
+					ctx.lineTo(casetteX + casetteWidth - cornerRad - inset, yVal);
+					ctx.stroke();
+					ctx.closePath();
+				}
+
+
+				ctx.textBaseline = "bottom";
+				ctx.textAlign = "left";
+				ctx.font = "bold 30px sans-serif";
+				ctx.fillStyle = "black";
+				ctx.fillText(tracks[currentTrack].name, casetteX + cornerRad + inset, line1Y);
+
+				ctx.fillStyle = songObj.col1;
+				ctx.fillText(songObj.name, casetteX + cornerRad + inset, line2Y);
+
+				//===================
+				//VISUALIZER FOR AUDIO 
+				//===================
+				const bufferLength = analyser.frequencyBinCount;
+				const dataArray = new Uint8Array(bufferLength);
+				analyser.getByteFrequencyData(dataArray);
+
+				const useBufLen = bufferLength * 2 / 3;
+				const visWidth = casetteWidth * 7 / 8;
+				const visHeight = casetteHeight * 2 / 3;
+				const visX = (width - visWidth) / 2, visY = casetteY;
+				const visBarWidth = visWidth / useBufLen;
+				for (let i = 0; i < useBufLen; i++) {
+					let visBarHeight = dataArray[i] / 256 * visHeight;
+					visBarHeight = Math.floor(visBarHeight / 10) * 10;
+					ctx.fillStyle = `hsl(${visBarHeight / visHeight * 250}, 100%, 50%)`;
+					ctx.fillRect(visX + i * visBarWidth, visY - visBarHeight, visBarWidth, visBarHeight);
+				}
+
+
+				lastTime = time;
+				requestAnimationFrame(draw);
+			}
+
+			//===================
+			//REPEATING CHECK FUNCTIONS
+			//===================
+
+			function sleep(ms) {
+				return new Promise(resolve => setTimeout(resolve, ms));
+			}
+
+			async function loopCheck() {
+				//Checks if the rain audio is close enough to the end to be reset
+				if (rain.currentTime >= rain.duration - 1) rain.currentTime = 0;
+
+				//Checks if the song is close enough to the end to be reset
+				const song = tracks[currentTrack].songs[currentSong].song;
+				if (song.currentTime >= song.duration - 1) song.currentTime = 0;
+
+				//Check if the page needs to be reloaded due to an error with the audio context
+				if (audioCtx.state === "interrupted") location.reload();
+
+				await sleep(500);
+				loopCheck();
+			}
+
+			draw();
+			loopCheck();
+
+		} catch (err) {
+			alert(err);
+			alert(err.stack)
+		}
+	</script>
+</body>
+
+</html>
